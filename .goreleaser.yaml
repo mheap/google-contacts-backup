@@ -1,0 +1,113 @@
+# GoReleaser configuration for google-contacts-backup
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: google-contacts-backup
+    main: .
+    binary: google-contacts-backup
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - "386"
+    ignore:
+      # macOS doesn't support 386
+      - goos: darwin
+        goarch: "386"
+    ldflags:
+      - -s -w
+      - -X github.com/mheap/google-contacts-backup/cmd.Version={{.Version}}
+
+archives:
+  - id: tgz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    format: tar.gz
+    files:
+      - LICENSE
+      - README.md
+
+  - id: zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    format: zip
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  disable: true
+
+brews:
+  - ids:
+      - tgz
+    repository:
+      owner: mheap
+      name: homebrew-tap
+      token: "{{ .Env.PAT }}"
+    directory: Formula
+    homepage: https://github.com/mheap/google-contacts-backup
+    description: Backup and restore Google Contacts to/from a JSON file
+    license: MIT
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    install: |
+      bin.install "google-contacts-backup"
+    test: |
+      system "#{bin}/google-contacts-backup", "--version"
+
+release:
+  github:
+    owner: mheap
+    name: google-contacts-backup
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Release {{ .Tag }} ({{ .Date }})
+
+    Backup and restore your Google Contacts with ease!
+  footer: |
+    ## Installation
+
+    ### Homebrew (macOS/Linux)
+    ```bash
+    brew install mheap/tap/google-contacts-backup
+    ```
+
+    ### Manual Installation
+    Download the appropriate binary for your platform from the assets above.
+
+    ## Quick Start
+
+    1. Set up Google Cloud credentials (see README for details)
+    2. Save credentials to `~/.config/google-contacts-backup/credentials.json`
+    3. Run `google-contacts-backup auth` to authenticate
+    4. Run `google-contacts-backup backup` to backup your contacts
