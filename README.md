@@ -1,10 +1,11 @@
 # Google Contacts Backup
 
-A CLI tool to backup and restore your Google Contacts to/from a JSON file.
+A CLI tool to backup and restore your Google Contacts to/from JSON or CSV files.
 
 ## Features
 
 - **Full Backup**: Downloads all contact fields including names, emails, phones, addresses, organizations, birthdays, notes, custom fields, and more
+- **Multiple Formats**: Export as JSON (full backup with restore support) or Google-compatible CSV
 - **Contact Groups**: Backs up and restores contact groups (labels)
 - **OAuth2 Authentication**: Secure browser-based authentication with token caching
 - **Progress Indicators**: Visual progress bars for all operations
@@ -68,12 +69,20 @@ You only need to run this once. The tokens are cached and automatically refreshe
 
 ### Backup Contacts
 
+The backup command supports two output formats:
+- **JSON** (default): Full backup that can be restored using this tool
+- **CSV**: Google-compatible format that can be imported via the Google Contacts web UI
+
 ```bash
-# Backup to a timestamped file (e.g., contacts-20240115-103045.json)
+# Backup to a timestamped JSON file (default)
 google-contacts-backup backup
 
-# Backup to a specific file
+# Backup to a specific JSON file
 google-contacts-backup backup -o my-contacts.json
+
+# Backup as Google-compatible CSV
+google-contacts-backup backup --format csv
+google-contacts-backup backup -f csv -o my-contacts.csv
 
 # Use a custom credentials file
 google-contacts-backup backup -c ~/path/to/credentials.json -o backup.json
@@ -111,7 +120,8 @@ The `auth` command has no additional options beyond the global `--credentials` f
 
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
-| `--output` | `-o` | Output file path | `contacts-YYYYMMDD-HHMMSS.json` |
+| `--output` | `-o` | Output file path | `contacts-YYYYMMDD-HHMMSS.json` (or `.csv`) |
+| `--format` | `-f` | Output format: `json` or `csv` | `json` |
 
 ### Restore Command Options
 
@@ -120,9 +130,11 @@ The `auth` command has no additional options beyond the global `--credentials` f
 | `--input` | `-i` | Input backup file path (required) | |
 | `--confirm` | | Skip confirmation prompt | `false` |
 
-## Backup File Format
+## Backup File Formats
 
-The backup file is a JSON file with the following structure:
+### JSON Format
+
+The JSON format provides a complete backup that can be restored using this tool:
 
 ```json
 {
@@ -149,9 +161,25 @@ The backup file is a JSON file with the following structure:
 }
 ```
 
+### CSV Format
+
+The CSV format is compatible with Google Contacts import. It uses the official Google CSV format with columns like:
+
+- Name fields: `Name Prefix`, `First Name`, `Middle Name`, `Last Name`, `Name Suffix`, `Nickname`
+- Contact fields: `Email 1 - Label`, `Email 1 - Value`, `Phone 1 - Label`, `Phone 1 - Value`, etc.
+- Address fields: `Address 1 - Street`, `Address 1 - City`, `Address 1 - Region`, etc.
+- Organization: `Organization Name`, `Organization Title`, `Organization Department`
+- Other: `Birthday`, `Notes`, `Labels`
+
+To import a CSV backup:
+1. Go to [Google Contacts](https://contacts.google.com)
+2. Click "Import" in the left sidebar
+3. Select your CSV file and click "Import"
+
 ## Limitations
 
-- **Contact Photos**: Photos are stored as URLs in the backup, but they cannot be restored via the Google People API. The URLs may also expire over time.
+- **Contact Photos**: Photos are stored as URLs in JSON backups, but they cannot be restored via the Google People API. The URLs may also expire over time. Photos are not included in CSV exports.
+- **CSV Restore**: CSV files can only be imported via the Google Contacts web UI, not restored using this tool. Use JSON format for full backup/restore capability.
 - **System Groups**: System contact groups (My Contacts, Starred, etc.) cannot be deleted or recreated. Only user-created groups are backed up and restored.
 - **Read-Only Fields**: Some server-assigned fields (like `resourceName`, `etag`, and metadata) are stripped during restore as new contacts receive new identifiers.
 
