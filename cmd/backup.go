@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/schollz/progressbar/v3"
@@ -15,27 +16,36 @@ import (
 )
 
 var (
-	outputFile string
+	outputFile   string
+	outputFormat string
 )
 
 // backupCmd represents the backup command
 var backupCmd = &cobra.Command{
 	Use:   "backup",
-	Short: "Backup Google Contacts to a JSON file",
-	Long: `Download all your Google Contacts and save them to a JSON file.
+	Short: "Backup Google Contacts to a JSON or CSV file",
+	Long: `Download all your Google Contacts and save them to a file.
+
+Supported formats:
+  - json: Full backup including all contact data and groups (default)
+  - csv:  Google-compatible CSV that can be imported via Google Contacts web UI
 
 The backup includes:
   - All contact fields (names, emails, phones, addresses, etc.)
-  - Contact photos (as URLs - note: URLs may expire)
-  - Contact groups (labels)
+  - Contact photos (as URLs - note: URLs may expire, JSON only)
+  - Contact groups/labels
   - Custom fields
 
 Examples:
-  # Backup to a timestamped file (default)
+  # Backup to a timestamped JSON file (default)
   google-contacts-backup backup
 
-  # Backup to a specific file
+  # Backup to a specific JSON file
   google-contacts-backup backup -o my-contacts.json
+
+  # Backup as Google-compatible CSV
+  google-contacts-backup backup --format csv
+  google-contacts-backup backup -f csv -o my-contacts.csv
 
   # Use a specific credentials file
   google-contacts-backup backup -c ~/my-credentials.json -o backup.json`,
@@ -45,14 +55,36 @@ Examples:
 func init() {
 	rootCmd.AddCommand(backupCmd)
 
-	// Default filename with timestamp
-	defaultOutput := fmt.Sprintf("contacts-%s.json", time.Now().Format("20060102-150405"))
-	backupCmd.Flags().StringVarP(&outputFile, "output", "o", defaultOutput,
-		"Output file path for the backup")
+	backupCmd.Flags().StringVarP(&outputFile, "output", "o", "",
+		"Output file path for the backup (default: contacts-TIMESTAMP.json or .csv)")
+	backupCmd.Flags().StringVarP(&outputFormat, "format", "f", "json",
+		"Output format: json (full backup) or csv (Google-compatible)")
+}
+
+// getDefaultOutputFile returns the default output filename based on format
+func getDefaultOutputFile(format string) string {
+	timestamp := time.Now().Format("20060102-150405")
+	switch strings.ToLower(format) {
+	case "csv":
+		return fmt.Sprintf("contacts-%s.csv", timestamp)
+	default:
+		return fmt.Sprintf("contacts-%s.json", timestamp)
+	}
 }
 
 func runBackup(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+
+	// Validate format
+	format := strings.ToLower(outputFormat)
+	if format != "json" && format != "csv" {
+		return fmt.Errorf("invalid format %q: must be 'json' or 'csv'", outputFormat)
+	}
+
+	// Set default output file if not specified
+	if outputFile == "" {
+		outputFile = getDefaultOutputFile(format)
+	}
 
 	// Check if credentials file exists
 	if _, err := os.Stat(credentialsFile); os.IsNotExist(err) {
@@ -131,19 +163,34 @@ func runBackup(cmd *cobra.Command, args []string) error {
 
 	// Save backup to file
 	fmt.Printf("\nSaving backup to %s...\n", outputFile)
-	if err := backup.SaveToFile(outputFile); err != nil {
-		return fmt.Errorf("failed to save backup: %w", err)
+
+	switch format {
+	case "csv":
+		if err := backup.SaveToCSV(outputFile); err != nil {
+			return fmt.Errorf("failed to save backup: %w", err)
+		}
+	default:
+		if err := backup.SaveToFile(outputFile); err != nil {
+			return fmt.Errorf("failed to save backup: %w", err)
+		}
 	}
 
 	// Print summary
 	fmt.Println()
 	fmt.Println("Backup completed successfully!")
 	fmt.Println()
+	fmt.Printf("  Format:   %s\n", strings.ToUpper(format))
 	fmt.Printf("  Contacts: %d\n", backup.ContactCount)
 	fmt.Printf("  Groups:   %d\n", backup.GroupCount)
 	fmt.Printf("  File:     %s\n", outputFile)
 	fmt.Println()
-	fmt.Println("Note: Contact photos are stored as URLs which may expire over time.")
+
+	if format == "json" {
+		fmt.Println("Note: Contact photos are stored as URLs which may expire over time.")
+	} else {
+		fmt.Println("Note: CSV format can be imported directly via Google Contacts web UI.")
+		fmt.Println("      Contact photos and some metadata are not included in CSV format.")
+	}
 
 	return nil
 }
